@@ -123,5 +123,25 @@ resource "aws_iam_role_policy" "lambda_network_policy" {
   })
 }
 
+
+# 1. This zips up your Python code into a gift box
+data "archive_file" "lambda_zip" {
+  type        = "zip"
+  source_file = "remediate.py"
+  output_path = "lambda_function_payload.zip"
+}
+
+# 2. This creates the actual Robot (Lambda Function)
+resource "aws_lambda_function" "remediation_lambda" {
+  filename      = "lambda_function_payload.zip"
+  function_name = "security_remediation_bot"
+  role          = aws_iam_role.iam_for_lambda.arn
+  handler       = "remediate.lambda_handler"
+  runtime       = "python3.9"
+
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+}
+
+
 # This helper finds your AWS Account ID automatically
 data "aws_caller_identity" "current" {}
