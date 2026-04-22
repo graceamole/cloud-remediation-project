@@ -73,5 +73,55 @@ resource "aws_cloudwatch_event_rule" "detect_sg_change" {
   })
 }
 
+# --- lamda function
+resource "aws_iam_role" "iam_for_lambda" {
+  name = "remediation_lambda_role"
+
+  # This tells AWS: "Who is allowed to wear this badge?"
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Sid    = ""
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      },
+    ]
+  })
+}
+
+# ---lambda roles
+resource "aws_iam_role_policy" "lambda_network_policy" {
+  name = "lambda_network_remediation_policy"
+  role = aws_iam_role.iam_for_lambda.id
+
+  # This lists exactly what the robot can touch
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = [
+          "ec2:DescribeSecurityGroups",
+          "ec2:RevokeSecurityGroupIngress"
+        ]
+        Resource = "*"
+      },
+      {
+        Effect   = "Allow"
+        Action   = [
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      }
+    ]
+  })
+}
+
 # This helper finds your AWS Account ID automatically
 data "aws_caller_identity" "current" {}
