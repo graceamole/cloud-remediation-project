@@ -51,5 +51,27 @@ resource "aws_cloudtrail" "main_trail" {
   depends_on                    = [aws_s3_bucket_policy.trail_policy]
 }
 
+
+# This creates the 'Security Camera' (EventBridge Rule)
+resource "aws_cloudwatch_event_rule" "detect_sg_change" {
+  name        = "detect-security-group-change"
+  description = "Fires when a Security Group rule is created or modified"
+
+  # This 'Pattern' tells AWS exactly what event to look for
+  event_pattern = jsonencode({
+    "source": ["aws.ec2"],
+    "detail-type": ["AWS API Call via CloudTrail"],
+    "detail": {
+      "eventSource": ["ec2.amazonaws.com"],
+      "eventName": [
+        "AuthorizeSecurityGroupIngress",
+        "AuthorizeSecurityGroupEgress",
+        "RevokeSecurityGroupIngress",
+        "RevokeSecurityGroupEgress"
+      ]
+    }
+  })
+}
+
 # This helper finds your AWS Account ID automatically
 data "aws_caller_identity" "current" {}
