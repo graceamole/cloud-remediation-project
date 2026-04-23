@@ -64,12 +64,8 @@ resource "aws_cloudwatch_event_rule" "remediation_rule" {
     "detail": {
       "eventSource": ["ec2.amazonaws.com"],
       "eventName": [
-        "AuthorizeSecurityGroupIngress",
-        "AuthorizeSecurityGroupEgress"
+        "AuthorizeSecurityGroupIngress"
       ]
-      "userIdentity": {
-        "userName": [{ "anything-but": "security_remediation_bot" }]
-      }
     }
   })
 }

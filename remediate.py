@@ -2,7 +2,9 @@ import boto3
 from botocore.exceptions import ClientError
 
 def lambda_handler(event, context):
-    ec2 = boto3.client('ec2')
+    # Detect the region where the event happened
+    region = event.get('region', 'us-east-1')
+    ec2 = boto3.client('ec2', region_name=region)
     
     sg_id = event['detail']['requestParameters']['groupId']
     items = event['detail']['requestParameters'].get('ipPermissions', {}).get('items', [])
@@ -10,13 +12,17 @@ def lambda_handler(event, context):
     for item in items:
         # Check for Port 22 or 3389 open to the world
         is_forbidden = item.get('fromPort') in [22, 3389]
-        is_open_to_world = any(ip.get('cidrIp') == '0.0.0.0/0' for ip in item.get('ipRanges', {}).get('items', []))
+        
+        # Check if the rule is open to '0.0.0.0/0'
+        ip_ranges = item.get('ipRanges', {}).get('items', [])
+        is_open_to_world = any(ip.get('cidrIp') == '0.0.0.0/0' for ip in ip_ranges)
 
         if is_forbidden and is_open_to_world:
-            print(f"CRITICAL: Port {item.get('fromPort')} opened to world on {sg_id}. Deleting...")
+            port = item.get('fromPort')
+            print(f"CRITICAL: Port {port} opened to world on {sg_id} in {region}. Deleting...")
             
             try:
-                # We RE-MAP the keys to match exactly what Boto3 expects (PascalCase)
+                # Re-mapping keys to PascalCase for Boto3
                 ec2.revoke_security_group_ingress(
                     GroupId=sg_id,
                     IpPermissions=[{
@@ -26,8 +32,12 @@ def lambda_handler(event, context):
                         'IpRanges': [{'CidrIp': '0.0.0.0/0'}]
                     }]
                 )
-                print("SUCCESS: Rule removed.")
+                print(f"SUCCESS: Rule for Port {port} removed.")
             except ClientError as e:
-                print(f"ERROR: {e}")
+                # Idempotency: If someone else deleted it first, don't crash!
+                if e.response['Error']['Code'] == 'InvalidPermission.NotFound':
+                    print(f"INFO: Rule for Port {port} already removed.")
+                else:
+                    print(f"ERROR: {e}")
                 
     return {'statusCode': 200}
