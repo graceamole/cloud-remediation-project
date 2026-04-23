@@ -53,7 +53,7 @@ resource "aws_cloudtrail" "main_trail" {
 
 
 # This creates the 'Security Camera' (EventBridge Rule)
-resource "aws_cloudwatch_event_rule" "detect_sg_change" {
+resource "aws_cloudwatch_event_rule" "remediation_rule" {
   name        = "detect-security-group-change"
   description = "Fires when a Security Group rule is created or modified"
 
@@ -65,10 +65,11 @@ resource "aws_cloudwatch_event_rule" "detect_sg_change" {
       "eventSource": ["ec2.amazonaws.com"],
       "eventName": [
         "AuthorizeSecurityGroupIngress",
-        "AuthorizeSecurityGroupEgress",
-        "RevokeSecurityGroupIngress",
-        "RevokeSecurityGroupEgress"
+        "AuthorizeSecurityGroupEgress"
       ]
+      "userIdentity": {
+        "userName": [{ "anything-but": "security_remediation_bot" }]
+      }
     }
   })
 }
@@ -137,11 +138,29 @@ resource "aws_lambda_function" "remediation_lambda" {
   function_name = "security_remediation_bot"
   role          = aws_iam_role.iam_for_lambda.arn
   handler       = "remediate.lambda_handler"
+  timeout = 15 
   runtime       = "python3.9"
-
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
 }
 
+
+# --- STEP 10: THE PERMISSION ---
+# This tells AWS: "It is okay for the Alarm to wake up the Robot"
+resource "aws_lambda_permission" "allow_cloudwatch" {
+  statement_id  = "AllowExecutionFromCloudWatch"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.remediation_lambda.function_name
+  principal     = "events.amazonaws.com"
+  source_arn    = aws_cloudwatch_event_rule.remediation_rule.arn
+}
+
+# --- STEP 11: THE TARGET (The Wire) ---
+# This connects the "Motion Sensor" to the "Robot"
+resource "aws_cloudwatch_event_target" "remediate_lambda_target" {
+  rule      = aws_cloudwatch_event_rule.remediation_rule.name
+  target_id = "SendToLambda"
+  arn       = aws_lambda_function.remediation_lambda.arn
+}
 
 # This helper finds your AWS Account ID automatically
 data "aws_caller_identity" "current" {}
