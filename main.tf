@@ -9,13 +9,13 @@ resource "aws_security_group" "remediation_lab_sg" {
   vpc_id      = data.aws_vpc.default.id
 }
 
-# 1. Create a "Bucket" to store the logs
+# Create a "Bucket" to store the logs
 resource "aws_s3_bucket" "trail_bucket" {
   bucket        = "my-remediation-bot-logs-${data.aws_caller_identity.current.account_id}"
   force_destroy = true # Allows us to delete the bucket easily later
 }
 
-# 2. Add a policy so CloudTrail has permission to save files in that bucket
+# Add a policy so CloudTrail has permission to save files in that bucket
 resource "aws_s3_bucket_policy" "trail_policy" {
   bucket = aws_s3_bucket.trail_bucket.id
   policy = jsonencode({
@@ -42,7 +42,7 @@ resource "aws_s3_bucket_policy" "trail_policy" {
   })
 }
 
-# 3. Finally, turn on the Trail itself
+# Finally, turn on the Trail itself
 resource "aws_cloudtrail" "main_trail" {
   name                          = "remediation-bot-trail"
   s3_bucket_name                = aws_s3_bucket.trail_bucket.id
@@ -121,14 +121,14 @@ resource "aws_iam_role_policy" "lambda_network_policy" {
 }
 
 
-# 1. This zips up your Python code into a gift box
+# This zips up your Python code into a gift box
 data "archive_file" "lambda_zip" {
   type        = "zip"
   source_file = "remediate.py"
   output_path = "lambda_function_payload.zip"
 }
 
-# 2. This creates the actual Robot (Lambda Function)
+# This creates the actual Robot (Lambda Function)
 resource "aws_lambda_function" "remediation_lambda" {
   filename      = "lambda_function_payload.zip"
   function_name = "security_remediation_bot"
@@ -148,7 +148,7 @@ resource "aws_lambda_function" "remediation_lambda" {
 }
 
 
-# --- STEP 10: THE PERMISSION ---
+# THE PERMISSION
 # This tells AWS: "It is okay for the Alarm to wake up the Robot"
 resource "aws_lambda_permission" "allow_cloudwatch" {
   statement_id  = "AllowExecutionFromCloudWatch"
@@ -158,7 +158,7 @@ resource "aws_lambda_permission" "allow_cloudwatch" {
   source_arn    = aws_cloudwatch_event_rule.remediation_rule.arn
 }
 
-# --- STEP 11: THE TARGET (The Wire) ---
+# THE TARGET (The Wire) ---
 # This connects the "Motion Sensor" to the "Robot"
 resource "aws_cloudwatch_event_target" "remediate_lambda_target" {
   rule      = aws_cloudwatch_event_rule.remediation_rule.name
@@ -167,12 +167,12 @@ resource "aws_cloudwatch_event_target" "remediate_lambda_target" {
 }
 
 
-# 1. The "Post Office" (SNS Topic)
+#  The "Post Office" (SNS Topic)
 resource "aws_sns_topic" "remediation_alerts" {
   name = "security-remediation-alerts"
 }
 
-# 2. The "Subscriber" (Your Email)
+# The "Subscriber" (Your Email)
 resource "aws_sns_topic_subscription" "email_target" {
   topic_arn = aws_sns_topic.remediation_alerts.arn
   protocol  = "email"
