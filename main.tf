@@ -137,6 +137,14 @@ resource "aws_lambda_function" "remediation_lambda" {
   timeout = 15 
   runtime       = "python3.9"
   source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  # 3. Update the Lambda to know about the SNS Topic
+# Find your existing aws_lambda_function block and ADD the environment section:
+  environment {
+    variables = {
+      SNS_TOPIC_ARN = aws_sns_topic.remediation_alerts.arn
+    }
+  }
+
 }
 
 
@@ -156,6 +164,39 @@ resource "aws_cloudwatch_event_target" "remediate_lambda_target" {
   rule      = aws_cloudwatch_event_rule.remediation_rule.name
   target_id = "SendToLambda"
   arn       = aws_lambda_function.remediation_lambda.arn
+}
+
+
+# 1. The "Post Office" (SNS Topic)
+resource "aws_sns_topic" "remediation_alerts" {
+  name = "security-remediation-alerts"
+}
+
+# 2. The "Subscriber" (Your Email)
+resource "aws_sns_topic_subscription" "email_target" {
+  topic_arn = aws_sns_topic.remediation_alerts.arn
+  protocol  = "email"
+  endpoint  = "graceamole30@gmail.com" # <---you can change THIS to your real email!
+}
+
+
+
+# 4. Give the Lambda permission to "Send Mail"
+
+resource "aws_iam_role_policy" "lambda_sns_policy" {
+  name = "lambda_sns_policy"
+  role = aws_iam_role.iam_for_lambda.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "sns:Publish"
+        Resource = aws_sns_topic.remediation_alerts.arn
+      }
+    ]
+  })
 }
 
 # This helper finds your AWS Account ID automatically
